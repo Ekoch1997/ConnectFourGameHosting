@@ -5,6 +5,7 @@ import pickle
 from os import path
 from trueskill import Rating, rate_1vs1
 import trueskill
+import pygame
 
 
 initialElo = 1000.0
@@ -69,6 +70,11 @@ def printBoard(position):
         for row in position:
             print(row)
         print("***********************************")
+
+def UIGame():
+    if playerHistory[player1]["IsComputer"] == 0 or playerHistory[player2]["IsComputer"] == 0:
+        return True
+    return False
 
 def checkForWin(position):
     
@@ -190,10 +196,10 @@ def checkForWin(position):
     
     return False
 
-def playerMove(position,letter):
+def playerMove(position,y):
 
-    while 'coordinates' not in locals():
-        y = int(input("Enter the column for 'O':  "))
+    coordinates = (-1,-1)
+    while coordinates == (-1,-1):
         if y >= 0 and y < len(position[0]):
             for x in range(len(position)):
                 if (position[len(position) - 1 - x][y] == ' '):
@@ -204,29 +210,89 @@ def playerMove(position,letter):
                     print("No more spots available, please choose another column")
 
         else:
-            print("Invalid Entry, please enter a number")
-        
-    insertLetter(position, letter, coordinates)
-    return
+            pass
+    
+    return coordinates
 
+def draw_window(position):
+
+    WIN.fill((0,176,240))
+
+    pygame.draw.rect(WIN,(255,255,0),(50,50,WIDTH - 100,HEIGHT - 100))
+    
+    for i in range(6):
+        for j in range(7):
+            if position[i][j] == ' ':
+                pygame.draw.circle(WIN,(200,200,200),(j*100 + 100, i*80 + 100),35)
+            elif position[i][j] == "X":
+                pygame.draw.circle(WIN,(255,0,0),(j*100 + 100, i*80 + 100),35)
+            elif position[i][j] == "O":
+                pygame.draw.circle(WIN,(0,0,255),(j*100 + 100, i*80 + 100),35)
+
+
+    pygame.display.update()
+
+
+if UIGame():
+    WIDTH, HEIGHT = 800, 600
+    FPS = 60
+
+    WIN = pygame.display.set_mode((WIDTH,HEIGHT))
+    pygame.display.set_caption("Connect4")
+    clock = pygame.time.Clock()
+
+def gameLoop():
+
+    clock.tick(FPS)
+    draw_window(position)
+
+waitingOnPlayer = False
 currentPlayer = "X"
 while not checkForWin(position) and not checkForDraw(position):
+
+    if UIGame():
+        gameLoop()
+
     
     if currentPlayer == "X":
-        p = subprocess.run(["python",player1,json.dumps(position),"X"], capture_output=True, text=True)
+        if playerHistory[player1]["IsComputer"] == 1:
+            p = subprocess.run(["python",player1,json.dumps(position),"X"], capture_output=True, text=True)
+            output = eval(p.stdout)
+        else:
+            waitingOnPlayer = True
+            output = (-1,-1)
+            clock.tick(FPS)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+                if pygame.mouse.get_pressed()[0]:
+                    print(pygame.mouse.get_pos()[0])
+                    col = (pygame.mouse.get_pos()[0] - 50) // 100
+                    print (col)
+                    output = playerMove(position,col)
+
+            if output != (-1,-1):
+                waitingOnPlayer = False
         
     else:
-        p = subprocess.run(["python",player2,json.dumps(position),"O"], capture_output=True, text=True)
+        if playerHistory[player2]["IsComputer"] == 1:
+            p = subprocess.run(["python",player2,json.dumps(position),"O"], capture_output=True, text=True)
+            output = eval(p.stdout)
+        else:
+            output = playerMove(position,currentPlayer)
 
-    output = eval(p.stdout)
-    insertLetter(position,currentPlayer,output)
+    if waitingOnPlayer == False:
+        insertLetter(position,currentPlayer,output)
 
-    if currentPlayer == "X":
-        currentPlayer = "O"
-    else:
-        currentPlayer = "X"
+        if currentPlayer == "X":
+            currentPlayer = "O"
+        else:
+            currentPlayer = "X"
+
 
 with open("playerHistory.pickle", "wb") as f:
     pickle.dump(playerHistory, f)
 
 print(playerHistory)
+
+pygame.quit()
